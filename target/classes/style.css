@@ -1,0 +1,31 @@
+.bordered {
+    -fx-border-width: 5px;
+    -fx-border-style: solid;
+    -fx-border-color: gray;
+}
+
+Button {
+    -fx-background-color: #a6deff;
+    -fx-border-width: 0px;
+    -fx-border-color: #63b6d4;
+    -fx-padding: 3 30 3 30;
+    -fx-font-size: 14px;
+    -fx-text-fill: black;
+}
+
+Button:hover {
+    -fx-background-color: #8ad4ff;
+    -fx-text-fill: white;
+}
+
+Label {
+    -fx-font-size:14px;
+    -fx-padding: 3 30 3 30;
+}
+
+#moneyLabel{
+    -fx-background-color: #8de094;
+    -fx-padding: 3 30 3 30;
+    -fx-font-size: 14px;
+    -fx-text-fill: black;
+}
