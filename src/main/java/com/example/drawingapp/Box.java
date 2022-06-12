@@ -295,4 +295,9 @@ abstract class Box {
     {
         return this.currentRotation;
     }
+
+    public double getCost()
+    {
+        return this.cost;
+    }
 }

@@ -7,15 +7,19 @@
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.VBox?>
 <AnchorPane fx:id="anchorPane" prefHeight="600.0" prefWidth="750.0" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.drawingapp.HelloController">
     <children >
-        <HBox layoutX="50.0" layoutY="10.0" spacing="10.0">
-            <Button fx:id="boxButton" text="Building"/>
-            <Button fx:id="roadButton" text="Road"/>
+        <HBox alignment="BASELINE_CENTER" minWidth="900.0" layoutY="10.0" layoutX="10.0" spacing="10.0">
             <Label fx:id="infoLabel" text="Click on a button to select tool"/>
-            <Label fx:id="moneyLabel" text="insert money"/>
         </HBox>
-        <Pane styleClass="bordered" layoutX="50.0" layoutY="50.0"  prefHeight="500.0" prefWidth="650.0">
+        <VBox layoutX="10.0" layoutY="20.0" spacing="10.0">
+            <Label minWidth="120.0" fx:id="moneyChangeLabel" text="sample"/>
+            <Label alignment="CENTER" minWidth="120.0" fx:id="moneyLabel" text="insert money"/>
+            <Button minWidth="120.0" fx:id="boxButton" text="Building"/>
+            <Button minWidth="120.0" fx:id="roadButton" text="Road"/>
+        </VBox>
+        <Pane styleClass="bordered" layoutX="150.0" layoutY="50.0"  prefHeight="500.0" prefWidth="650.0">
             <Canvas fx:id="overlayCanvas" height="500.0" width="650.0" />
             <Canvas fx:id="canvas" height="500.0" width="650.0" />
         </Pane>

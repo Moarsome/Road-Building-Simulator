@@ -10,8 +10,11 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
 
 import java.net.URL;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +42,8 @@ public class HelloController {
     private Button roadButton;
     @FXML
     private Label moneyLabel;
+    @FXML
+    private Label moneyChangeLabel;
 
     private String mode = "none";
     private boolean active = false;
@@ -50,10 +55,13 @@ public class HelloController {
     public void initialize() {
         initGraphics();
 
+        moneyChangeLabel.setVisible(false);
+
         // Initialise User
         user = new User();
         user.addMoney(1000000000);
-        moneyLabel.setText(user.getMoneyString());
+        moneyLabel.setText(formatLargeNumber(user.getMoney()));
+
         // BACKGROUND
         ogc.setFill(Color.rgb(115, 189, 89));
         ogc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
@@ -82,6 +90,7 @@ public class HelloController {
             System.out.println("Created building");
             active = false;
             currentBox = new Building();
+            gc.setFill(Color.rgb(243, 189, 96, .8));
         }
         else if (nextMode == "road") {
             active = true;
@@ -104,9 +113,22 @@ public class HelloController {
                 active = true;
                 infoLabel.setText("Press 'esc' to cancel");
                 currentBox.updatePosition(x,y);
+                gc.setFill(Color.rgb(243, 189, 96, .8));
             } else {
-                if (user.deductMoney(currentBox.cost) == true) {
-                    moneyLabel.setText(user.getMoneyString());
+                if (user.deductMoney(currentBox.getCost()) == true) {
+                    System.out.println("Deducting "+currentBox.cost);
+
+                    // Formatting the deduction info
+                    moneyChangeLabel.setText("-"+formatLargeNumber(currentBox.getCost()));
+                    moneyChangeLabel.setStyle("-fx-text-fill: red");
+                    moneyChangeLabel.setVisible(true);
+
+                    // Creating a thread to make deduction info disappear after 3 seconds
+                    TestThread removeLabel = new TestThread(moneyChangeLabel);
+                    new Thread(removeLabel).start();
+                    // End
+
+                    moneyLabel.setText(formatLargeNumber(user.getMoney()));
                     active = false;
                     System.out.println("SETTING BUILDING");
 
@@ -136,7 +158,7 @@ public class HelloController {
             {
                 if (user.deductMoney(currentBox.cost) == true) {
                     System.out.println("Deducting "+currentBox.cost);
-                    moneyLabel.setText(user.getMoneyString());
+                    moneyLabel.setText(formatLargeNumber(user.getMoney()));
 //                     Just drawing the nodes so its easier to see
 //                double xnode[] = currentBox.getXnodes();
 //                double ynode[] = currentBox.getYnodes();
@@ -201,11 +223,23 @@ public class HelloController {
                 currentBox.setWidth(width);
                 currentBox.setHeight(height);
                 currentBox.updatePosition(newX, newY);
+
+                // Cost cursor text
+                gc.setFill(Color.rgb(220, 0, 0, 0.5));
+                gc.setFont(Font.font ("Verdana", 14));
+                gc.fillText("-"+formatLargeNumber(currentBox.getCost()),x,y);
+                gc.setFill(Color.rgb(243, 189, 96, .8));
             }
             else if (mode == "road")
             {
                 currentBox.updatePosition(x,y);
                 lockCursor(x,y, (Road) currentBox);
+
+                // Text
+                gc.setFill(Color.rgb(220, 0, 0, 0.5));
+                gc.setFont(Font.font ("Verdana", 14));
+                gc.fillText("-"+formatLargeNumber(currentBox.getCost()),x,y);
+                gc.setFill(Color.rgb(87, 87, 87, .8));
             }
 
 //            if (isRectValid(x,y, newX, newY) == false) {
@@ -272,16 +306,40 @@ public class HelloController {
 
             if (currentX != -1 && currentY != -1) {
                 double currentDist = box.getDist(currentX, x, currentY, y);
-
-                if (currentDist < shortestDist) ;
-                {
-                    shortestDist = currentDist;
                     closestX = currentX;
                     closestY = currentY;
-                }
+
             }
         }
 
         road.updatePosition(closestX, closestY);
+    }
+
+    ////////////////////////
+    // FORMATTING METHODS //
+    ////////////////////////
+
+    // Abbreviates large doubles as K, M or B
+    // e.g 1.01K, 403.42M
+    private String formatLargeNumber(double inputNumber)
+    {
+        DecimalFormat df = new DecimalFormat("#.##");
+        String output = String.valueOf(df.format(inputNumber));
+        String outputNoDecimal = String.valueOf(Math.round(inputNumber));
+
+        if (1000.0 <= inputNumber && inputNumber < 1000000.0)
+        {
+            output = outputNoDecimal.substring(0,outputNoDecimal.length()-3)+"."+output.substring(outputNoDecimal.length()-3,outputNoDecimal.length()-1)+" K";
+        }
+        else if (1000000.0 <= inputNumber && inputNumber < 1000000000.0)
+        {
+            output = outputNoDecimal.substring(0,outputNoDecimal.length()-6)+"."+output.substring(outputNoDecimal.length()-6,outputNoDecimal.length()-5)+" M";
+        }
+        else if (1000000000.00 <= inputNumber && inputNumber < 1000000000000.0)
+        {
+            output = outputNoDecimal.substring(0,outputNoDecimal.length()-9)+"."+output.substring(outputNoDecimal.length()-9,outputNoDecimal.length()-7)+" B";
+        }
+
+        return "$"+output;
     }
 }
