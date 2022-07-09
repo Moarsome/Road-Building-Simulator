@@ -1,16 +1,24 @@
 package com.example.drawingapp;
 
+import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.Group;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.canvas.Canvas;
+import javafx.scene.effect.ColorAdjust;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.AnchorPane;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextAlignment;
 
 import java.net.URL;
 import java.text.DecimalFormat;
@@ -31,31 +39,40 @@ public class HelloController {
     @FXML
     private Canvas overlayCanvas;
     @FXML
+    private Canvas midCanvas;
+    @FXML
     public GraphicsContext gc;
     @FXML
     public GraphicsContext ogc;
     @FXML
+    public GraphicsContext midgc;
+    @FXML
     private Label infoLabel;
+    @FXML
+    private Button selectButton;
     @FXML
     private Button boxButton;
     @FXML
     private Button roadButton;
     @FXML
     private Label moneyLabel;
-    @FXML
-    private Label moneyChangeLabel;
+    @FXML private VBox vbox;
+    @FXML private StackPane stackpane;
 
     private String mode = "none";
     private boolean active = false;
-    private List<Box> existingBoxes = new ArrayList<>();
+    private List<Box> existingBoxes;
+    private CTextBox sellButton;
+    private Box selectedBox;
     private Box currentBox;
     private User user;
+    private double hoverOpacity = 0.7;
 
     @FXML
     public void initialize() {
         initGraphics();
 
-        moneyChangeLabel.setVisible(false);
+        existingBoxes  = new ArrayList<>();
 
         // Initialise User
         user = new User();
@@ -63,27 +80,84 @@ public class HelloController {
         moneyLabel.setText(formatLargeNumber(user.getMoney()));
 
         // BACKGROUND
-        ogc.setFill(Color.rgb(115, 189, 89));
-        ogc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawBackground();
 
         // initialise events
         canvas.setOnMousePressed(e -> drawClicked(e.getX(), e.getY()));
         canvas.setOnMouseMoved(e -> drawUpdate(e.getX(),e.getY()));
+        canvas.setOnScroll(e -> drawScroll(e.getDeltaY()));
         anchorPane.setOnKeyPressed(e -> keyPressed(e.getCode()));
 
+        selectButton.setOnAction(e -> setMode("select"));
         boxButton.setOnAction(e -> setMode("building"));
         roadButton.setOnAction(e -> setMode("road"));
     }
 
     public void initGraphics() {
+        midgc = midCanvas.getGraphicsContext2D();
         gc = canvas.getGraphicsContext2D();
         ogc = overlayCanvas.getGraphicsContext2D();
+    }
+
+    public void drawBackground()
+    {
+        ogc.clearRect(0,0, canvas.getWidth(), canvas.getHeight());
+        ogc.setFill(Color.rgb(115, 189, 89));
+        ogc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawBoxes();
+    }
+
+    private void drawBoxes()
+    {
+        for (Box box:existingBoxes)
+        {
+            ogc.setFill(box.getColor());
+            ogc.fillPolygon(box.getXcoords(),box.getYcoords(),4);
+        }
+    }
+
+    // Animates change in money
+
+    private void animateLabel(double cost)
+    {
+        System.out.println("Starting thread");
+        Label label = new Label();
+        String formatCost = formatLargeNumber(cost);
+
+        if (cost > 0)
+        {
+            label.setText("+" + formatCost);
+            label.setStyle("-fx-text-fill: green");
+        }
+        else
+        {
+            label.setText(formatCost);
+            label.setStyle("-fx-text-fill: red");
+        }
+
+        Platform.runLater(() -> anchorPane.getChildren().add(label));
+        label.setLayoutY(50.0);
+
+        int secondsWait = 15;
+        while (secondsWait > 0) {
+            label.setLayoutY(label.getLayoutY()-2.0);
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            secondsWait--;
+        }
+
+        label.setVisible(false);
+        Platform.runLater(() -> anchorPane.getChildren().remove(label));
     }
 
     public void setMode(String nextMode)
     {
         active = false;
-        clearBoard();
+        clearGCBoard();
 
         if (nextMode == "building")
         {
@@ -97,14 +171,73 @@ public class HelloController {
             currentBox = new Road();
             gc.setFill(Color.rgb(87, 87, 87, .8));
         }
+        else if (nextMode == "select")
+        {
+            active = true;
+        }
         mode = nextMode;
         String capitalise = nextMode.substring(0,1).toUpperCase() + nextMode.substring(1);
         infoLabel.setText(capitalise+" mode selected!");
     }
 
+    public void drawScroll(double deltaY)
+    {
+        // Scroll up
+        if (deltaY > 0)
+        {
+            currentBox.rotateBox(-45);
+            user.setRotation(currentBox.getCurrentRotation());
+            drawUpdate(currentBox.getX1(),currentBox.getY1());
+        }
+        // Scroll down
+        else if (deltaY < 0)
+        {
+            currentBox.rotateBox(45);
+            user.setRotation(currentBox.getCurrentRotation());
+            drawUpdate(currentBox.getX1(),currentBox.getY1());
+        }
+    }
 
     public void drawClicked(double x, double y) {
-        clearBoard();
+        clearGCBoard();
+
+        if (mode == "select")
+        {
+            // Check if player wants to sell
+            if (sellButton != null)
+            {
+                    if (sellButton.onMouseEnter(x,y) && selectedBox != null)
+                    {
+                        double refund = selectedBox.getCost();
+                        Thread taskThread = new Thread(() -> animateLabel(refund));
+                        user.addMoney(refund);
+                        moneyLabel.setText(formatLargeNumber(user.getMoney()));
+
+                        taskThread.start();
+                        existingBoxes.remove(selectedBox);
+                        drawBackground();
+                    }
+            }
+
+            sellButton = null;
+            midgc.clearRect(0,0, midCanvas.getWidth(), midCanvas.getHeight());
+            Box hoverBox = checkBoxInBounds(x,y);
+
+            if (hoverBox != null)
+            {
+                selectedBox = hoverBox;
+                // Attempt border
+                midgc.setFill(Color.WHITE);
+                midgc.fillPolygon(borderArray(hoverBox.getXcoords(), 2), borderArray(hoverBox.getYcoords(), 2), 4);
+                midgc.setFill(hoverBox.getColor());
+                midgc.fillPolygon(hoverBox.getXcoords(),hoverBox.getYcoords(),4);
+
+                // Draw sell button
+                CTextBox btn = new CTextBox(10,10,50,30,"SELL", Color.RED, Color.WHITE);
+                btn.draw(gc);
+                sellButton = btn;
+            }
+        }
 
         if (mode == "building") {
             System.out.println("MODE BOX");
@@ -113,24 +246,17 @@ public class HelloController {
                 active = true;
                 infoLabel.setText("Press 'esc' to cancel");
                 currentBox.updatePosition(x,y);
-                gc.setFill(Color.rgb(243, 189, 96, .8));
+                gc.setFill(currentBox.getColor().deriveColor(0,1,1,hoverOpacity));
             } else {
-                if (user.deductMoney(currentBox.getCost()) == true) {
-                    System.out.println("Deducting "+currentBox.cost);
-
-                    // Formatting the deduction info
-                    moneyChangeLabel.setText("-"+formatLargeNumber(currentBox.getCost()));
-                    moneyChangeLabel.setStyle("-fx-text-fill: red");
-                    moneyChangeLabel.setVisible(true);
-
+                if (user.deductMoney(currentBox.getCost())) {
                     // Creating a thread to make deduction info disappear after 3 seconds
-                    TestThread removeLabel = new TestThread(moneyChangeLabel);
-                    new Thread(removeLabel).start();
+                    double cost = currentBox.getCost()*-1.0;
+                    Thread taskThread = new Thread(() -> animateLabel(cost));
+                    taskThread.start();
                     // End
 
                     moneyLabel.setText(formatLargeNumber(user.getMoney()));
                     active = false;
-                    System.out.println("SETTING BUILDING");
 
                     infoLabel.setText("Building created!");
                     ogc.setFill(Color.rgb(243, 189, 96));
@@ -141,7 +267,10 @@ public class HelloController {
                     if (currentBox.getY1() > y) {
                         currentBox.setY2(y);
                     }
-                    storeBox(currentBox);
+
+                    existingBoxes.add(currentBox);
+                    drawBoxes();
+
                     currentBox = new Building();
                 }
                 else
@@ -149,33 +278,27 @@ public class HelloController {
                     infoLabel.setText("Not enough money!");
                 }
             }
-
         }
         else if (mode == "road"){
-
-            gc.setFill(Color.DARKGRAY);
             if (active)
             {
-                if (user.deductMoney(currentBox.cost) == true) {
-                    System.out.println("Deducting "+currentBox.cost);
+                if (user.deductMoney(currentBox.cost)) {
                     moneyLabel.setText(formatLargeNumber(user.getMoney()));
-//                     Just drawing the nodes so its easier to see
-//                double xnode[] = currentBox.getXnodes();
-//                double ynode[] = currentBox.getYnodes();
-//
-//                for (int i = 0;i < 12;i++)
-//                {
-//                    ogc.setFill(Color.rgb(0, 255, 0));
-//                    ogc.fillOval(xnode[i]-2.5, ynode[i]-2.5, 5.0, 5.0);
-//                }
-
-                    System.out.println("SETTING ROAD");
                     infoLabel.setText("Road created!");
-                    ogc.setFill(Color.rgb(87, 87, 87));
-                    storeBox(currentBox);
+                    ogc.setFill(currentBox.getColor());
+
+                    // Animation thread start
+                    double cost = currentBox.getCost()*-1.0;
+                    Thread taskThread = new Thread(() -> animateLabel(cost));
+                    taskThread.start();
+                    // Animation thread end
+
+                    existingBoxes.add(currentBox);
+                    drawBoxes();
+
                     currentBox = new Road();
                     currentBox.setCurrentRotation(user.getRotation());
-                    gc.setFill(Color.rgb(87, 87, 87, .8));
+                    gc.setFill(currentBox.getColor().deriveColor(0,1,1,hoverOpacity));
                 }
                 else
                 {
@@ -183,24 +306,38 @@ public class HelloController {
                 }
             }
         }
-
     }
 
-    private void storeBox(Box box)
-    {
-        ogc.fillPolygon(box.getXcoords(),box.getYcoords(),4);
-        // existingBoxes is a collection of every object to track borders and valid positions
-        existingBoxes.add(currentBox);
-        currentBox = null;
-    }
+
 
     public void drawUpdate(double x, double y) {
-        // This is mainly just a ghost rectangle to guide the user.
+        if (mode == "select" && active)
+        {
+            clearGCBoard();
+            Box hoverBox = checkBoxInBounds(x,y);
+            if (hoverBox != null)
+            {
+                gc.setFill(hoverBox.getColor());
+                ColorAdjust adjust = new ColorAdjust();
+                adjust.setBrightness(0.2);
+                gc.setEffect(adjust);
+                gc.fillPolygon(hoverBox.getXcoords(), hoverBox.getYcoords(),4);
+                gc.setEffect(null);
+            }
+            if (sellButton != null) {
+                if (sellButton.onMouseEnter(x, y)) {
+                    sellButton.drawHighlight(gc);
+                } else {
+                    sellButton.draw(gc);
+                }
+            }
+        }
 
-        if (active && currentBox != null)
+        // This is mainly just a ghost rectangle to guide the user.
+        if (active && currentBox != null && mode != "select")
         {
             // Clear the canvas to avoid unnecessary ghost rectangles
-            clearBoard();
+            clearGCBoard();
 
             // Shorten doubles to make it easier to math
             double prevX = currentBox.getX1();
@@ -208,8 +345,8 @@ public class HelloController {
             double newX = x;
             double newY = y;
 
-            if (mode == "building") {
-
+            if (mode == "building")
+            {
                 double width = Math.abs(x - prevX);
                 double height = Math.abs(y - prevY);
 
@@ -225,21 +362,21 @@ public class HelloController {
                 currentBox.updatePosition(newX, newY);
 
                 // Cost cursor text
-                gc.setFill(Color.rgb(220, 0, 0, 0.5));
+                gc.setFill(Color.rgb(220, 0, 0));
                 gc.setFont(Font.font ("Verdana", 14));
-                gc.fillText("-"+formatLargeNumber(currentBox.getCost()),x,y);
-                gc.setFill(Color.rgb(243, 189, 96, .8));
+                gc.fillText("-"+formatLargeNumber(currentBox.getCost()),x+10.0,y-5.0);
+                gc.setFill(currentBox.getColor().deriveColor(0,1,1,hoverOpacity));
             }
             else if (mode == "road")
             {
                 currentBox.updatePosition(x,y);
-                lockCursor(x,y, (Road) currentBox);
+                lockCursor((Road) currentBox);
 
                 // Text
-                gc.setFill(Color.rgb(220, 0, 0, 0.5));
+                gc.setFill(Color.rgb(220, 0, 0));
                 gc.setFont(Font.font ("Verdana", 14));
-                gc.fillText("-"+formatLargeNumber(currentBox.getCost()),x,y);
-                gc.setFill(Color.rgb(87, 87, 87, .8));
+                gc.fillText("-"+formatLargeNumber(currentBox.getCost()),x+10.0,y-5.0);
+                gc.setFill(currentBox.getColor().deriveColor(0,1,1,hoverOpacity));
             }
 
 //            if (isRectValid(x,y, newX, newY) == false) {
@@ -256,12 +393,12 @@ public class HelloController {
         // CANCEL OPERATION
         if (key == KeyCode.ESCAPE)
         {
-            clearBoard();
+            clearGCBoard();
             active = false;
         }
         else if (key == KeyCode.R)
         {
-            currentBox.rotateBox();
+            currentBox.rotateBox(45);
             user.setRotation(currentBox.getCurrentRotation());
             drawUpdate(currentBox.getX1(),currentBox.getY1());
         }
@@ -284,36 +421,134 @@ public class HelloController {
     }
 
     // Clears the temporary canvas board
-    private void clearBoard()
+    private void clearGCBoard()
     {
         gc.clearRect(0,0,canvas.getWidth(),canvas.getHeight());
+    }
+
+    //////////////////
+    /// AESTHETICS ///
+    //////////////////
+
+    // Draw nodes
+
+    private void drawNodes(Box cB, GraphicsContext graphicsC)
+    {
+        double xnode[] = cB.getXnodes();
+        double ynode[] = cB.getYnodes();
+
+        for (int i = 0;i < 12;i++)
+        {
+            graphicsC.setFill(Color.rgb(0, 255, 0));
+            graphicsC.fillOval(xnode[i]-2.5, ynode[i]-2.5, 5.0, 5.0);
+        }
+    }
+
+    // Create border
+    private double[] borderArray(double[] dArray, double multiplier)
+    {
+        double[] newArray = new double[dArray.length];
+
+        double minNum = dArray[0], maxNum = dArray[0];
+
+        for (int j = 0; j < dArray.length; j++)
+        {
+            if (dArray[j] < minNum)
+                minNum = dArray[j];
+            if (dArray[j] > maxNum)
+                maxNum = dArray[j];
+        }
+
+        int i = 0;
+        for (double num:dArray)
+        {
+            if (num == minNum)
+                newArray[i] = num - multiplier;
+            if (num == maxNum)
+                newArray[i] = num + multiplier;
+            i++;
+        }
+
+        return newArray;
     }
 
       //////////////////////////////
      /// CURSOR LOCKING METHODS ///
     //////////////////////////////
 
-    private void lockCursor(double x, double y, Road road) {
+    private void lockCursor(Road road)
+    {
+        double closestX = road.getX1();
+        double closestY = road.getY1();
 
-        double shortestDist = road.getMinDist();
-        double closestX = x;
-        double closestY = y;
-
+        // Second position
         for (Box box:existingBoxes)
         {
-            double currentX = box.getClosestX(x,y);
-            double currentY = box.getClosestY(x,y);
+            double currentX = box.getClosestX(road.getXcoords()[3],road.getYcoords()[3]);
+            double currentY = box.getClosestY(road.getXcoords()[3],road.getYcoords()[3]);
+            double offsetX = road.getXcoords()[0] - road.getXcoords()[3];
+            double offsetY = road.getYcoords()[0] - road.getYcoords()[3];
 
-            if (currentX != -1 && currentY != -1) {
-                double currentDist = box.getDist(currentX, x, currentY, y);
-                    closestX = currentX;
-                    closestY = currentY;
-
+            if (currentX != -1 && currentY != -1)
+            {
+                System.out.println("Connection");
+                closestX = currentX+offsetX;
+                closestY = currentY+offsetY;
             }
         }
 
+        // Mouse position
+        for (Box box:existingBoxes)
+        {
+            double currentX = box.getClosestX(road.getX1(),road.getY1());
+            double currentY = box.getClosestY(road.getX1(),road.getY1());
+
+            if (currentX != -1 && currentY != -1)
+            {
+                    closestX = currentX;
+                    closestY = currentY;
+            }
+        }
+
+
+
         road.updatePosition(closestX, closestY);
     }
+
+    private Box checkBoxInBounds(double x, double y)
+    {
+        Box hoverBox = null;
+
+        for (Box box:existingBoxes)
+        {
+             double[] xcoords = box.getXcoords();
+             double[] ycoords = box.getYcoords();
+             double minX = xcoords[0], maxX = xcoords[0];
+             double minY = ycoords[0], maxY = ycoords[0];
+
+             // Find min and max values
+             for (int i = 0; i < 4; i++) {
+                 if (xcoords[i] < minX)
+                     minX = xcoords[i];
+                 if (ycoords[i] < minY)
+                     minY = ycoords[i];
+
+                 if (xcoords[i] > maxX)
+                     maxX = xcoords[i];
+                 if (ycoords[i] > maxY)
+                     maxY = ycoords[i];
+             }
+
+             // Check within boundaries
+             if ((x > minX && x < maxX) && (y > minY && y < maxY))
+             {
+                 hoverBox = box;
+             }
+        }
+
+        return hoverBox;
+    }
+
 
     ////////////////////////
     // FORMATTING METHODS //
@@ -324,6 +559,12 @@ public class HelloController {
     private String formatLargeNumber(double inputNumber)
     {
         DecimalFormat df = new DecimalFormat("#.##");
+        String formatOutput = "";
+        if (inputNumber < 0)
+        {
+            formatOutput += "-";
+            inputNumber *= -1.0;
+        }
         String output = String.valueOf(df.format(inputNumber));
         String outputNoDecimal = String.valueOf(Math.round(inputNumber));
 
@@ -333,13 +574,15 @@ public class HelloController {
         }
         else if (1000000.0 <= inputNumber && inputNumber < 1000000000.0)
         {
-            output = outputNoDecimal.substring(0,outputNoDecimal.length()-6)+"."+output.substring(outputNoDecimal.length()-6,outputNoDecimal.length()-5)+" M";
+            output = outputNoDecimal.substring(0,outputNoDecimal.length()-6)+"."+output.substring(outputNoDecimal.length()-6,outputNoDecimal.length()-4)+" M";
         }
         else if (1000000000.00 <= inputNumber && inputNumber < 1000000000000.0)
         {
             output = outputNoDecimal.substring(0,outputNoDecimal.length()-9)+"."+output.substring(outputNoDecimal.length()-9,outputNoDecimal.length()-7)+" B";
         }
 
-        return "$"+output;
+        formatOutput += "$"+output;
+
+        return formatOutput;
     }
 }

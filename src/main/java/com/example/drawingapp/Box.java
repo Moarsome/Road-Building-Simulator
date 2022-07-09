@@ -1,5 +1,7 @@
 package com.example.drawingapp;
 
+import javafx.scene.paint.Color;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 /*
@@ -18,6 +20,11 @@ abstract class Box {
     protected double currentRotation; // Rotation in radians
     protected double[] xnodes; // Connective nodes on the box
     protected double[] ynodes;
+
+    protected boolean currentlyHovered;
+    protected boolean currentlySelected;
+
+    protected Color color;
 
     protected double cost; // How much it costs to build
     protected double costMultiplier; // Set in objects
@@ -167,17 +174,22 @@ abstract class Box {
         return closestY;
     }
 
-    // Currently only rotates 45 degrees (quarter pi radians)
-    public void rotateBox()
+    public void rotateBox(double degrees)
     {
-        if (this.currentRotation < 2*Math.PI)
+        double radAdd = (degrees*Math.PI)/180.0;
+
+        double newRotation = this.currentRotation + radAdd;
+
+        if (newRotation >= 2*Math.PI)
         {
-            this.currentRotation += Math.PI/4;
+            newRotation -= 2*Math.PI;
         }
-        else
+        else if (newRotation < 0)
         {
-            this.currentRotation = 0;
+            newRotation += 2*Math.PI;
         }
+
+        this.currentRotation = newRotation;
     }
 
     public void updatePosition(double x1, double y1){
@@ -299,5 +311,29 @@ abstract class Box {
     public double getCost()
     {
         return this.cost;
+    }
+
+    public boolean isCurrentlyHovered() {
+        return currentlyHovered;
+    }
+
+    public void setCurrentlyHovered(boolean currentlyHovered) {
+        this.currentlyHovered = currentlyHovered;
+    }
+
+    public boolean isCurrentlySelected() {
+        return currentlySelected;
+    }
+
+    public void setCurrentlySelected(boolean currentlySelected) {
+        this.currentlySelected = currentlySelected;
+    }
+
+    public Color getColor() {
+        return color;
+    }
+
+    public void setColor(Color color) {
+        this.color = color;
     }
 }
