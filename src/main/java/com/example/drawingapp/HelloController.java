@@ -15,6 +15,7 @@ import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.Paint;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
@@ -32,39 +33,29 @@ import java.util.ResourceBundle;
 
 
 public class HelloController {
-    @FXML
-    private AnchorPane anchorPane;
-    @FXML
-    private Canvas canvas;
-    @FXML
-    private Canvas overlayCanvas;
-    @FXML
-    private Canvas midCanvas;
-    @FXML
-    public GraphicsContext gc;
-    @FXML
-    public GraphicsContext ogc;
-    @FXML
-    public GraphicsContext midgc;
-    @FXML
-    private Label infoLabel;
-    @FXML
-    private Button selectButton;
-    @FXML
-    private Button boxButton;
-    @FXML
-    private Button roadButton;
-    @FXML
-    private Label moneyLabel;
-    @FXML private VBox vbox;
-    @FXML private StackPane stackpane;
+    @FXML private AnchorPane anchorPane;
+    @FXML private Canvas canvas;
+    @FXML private Canvas overlayCanvas;
+    @FXML private Canvas midCanvas;
+    @FXML public GraphicsContext gc;
+    @FXML public GraphicsContext ogc;
+    @FXML public GraphicsContext midgc;
+    @FXML private Label infoLabel;
+    @FXML private Button selectButton;
+    @FXML private Button boxButton;
+    @FXML private Button roadButton;
+    @FXML private Button busLineButton;
+    @FXML private Label moneyLabel;
 
     private String mode = "none";
     private boolean active = false;
+    private boolean mouseDown = false;
     private List<Box> existingBoxes;
+    private List<BusNode> busNodes;
     private CTextBox sellButton;
     private Box selectedBox;
     private Box currentBox;
+    private BusNode currentBusNode;
     private User user;
     private double hoverOpacity = 0.7;
 
@@ -73,6 +64,7 @@ public class HelloController {
         initGraphics();
 
         existingBoxes  = new ArrayList<>();
+        busNodes = new ArrayList<>();
 
         // Initialise User
         user = new User();
@@ -91,6 +83,7 @@ public class HelloController {
         selectButton.setOnAction(e -> setMode("select"));
         boxButton.setOnAction(e -> setMode("building"));
         roadButton.setOnAction(e -> setMode("road"));
+        busLineButton.setOnAction(e -> setMode("busLine"));
     }
 
     public void initGraphics() {
@@ -116,42 +109,13 @@ public class HelloController {
         }
     }
 
-    // Animates change in money
-
-    private void animateLabel(double cost)
+    private void drawBusLineNodes()
     {
-        System.out.println("Starting thread");
-        Label label = new Label();
-        String formatCost = formatLargeNumber(cost);
-
-        if (cost > 0)
+        for (BusNode node:busNodes)
         {
-            label.setText("+" + formatCost);
-            label.setStyle("-fx-text-fill: green");
+            ogc.setFill(Color.rgb(34, 170, 246));
+            ogc.fillOval(node.getX()-4.0, node.getY()-4.0, 8.0, 8.0);
         }
-        else
-        {
-            label.setText(formatCost);
-            label.setStyle("-fx-text-fill: red");
-        }
-
-        Platform.runLater(() -> anchorPane.getChildren().add(label));
-        label.setLayoutY(50.0);
-
-        int secondsWait = 15;
-        while (secondsWait > 0) {
-            label.setLayoutY(label.getLayoutY()-2.0);
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-            secondsWait--;
-        }
-
-        label.setVisible(false);
-        Platform.runLater(() -> anchorPane.getChildren().remove(label));
     }
 
     public void setMode(String nextMode)
@@ -175,6 +139,12 @@ public class HelloController {
         {
             active = true;
         }
+        else if (nextMode == "busLine")
+        {
+            active = true;
+            currentBusNode = new BusNode();
+        }
+
         mode = nextMode;
         String capitalise = nextMode.substring(0,1).toUpperCase() + nextMode.substring(1);
         infoLabel.setText(capitalise+" mode selected!");
@@ -285,6 +255,7 @@ public class HelloController {
                 if (user.deductMoney(currentBox.cost)) {
                     moneyLabel.setText(formatLargeNumber(user.getMoney()));
                     infoLabel.setText("Road created!");
+
                     ogc.setFill(currentBox.getColor());
 
                     // Animation thread start
@@ -306,9 +277,26 @@ public class HelloController {
                 }
             }
         }
+        else if (mode == "busLine")
+        {
+            if (mouseDown == false) {
+                mouseDown = true;
+
+                if (currentBusNode.getLocked()) {
+
+                    busNodes.add(currentBusNode);
+                    drawBusLineNodes();
+
+                    currentBusNode = new BusNode();
+                    ogc.setFill(Color.rgb(34, 170, 246,hoverOpacity));
+                }
+            }
+            else
+            {
+                mouseDown = false;
+            }
+        }
     }
-
-
 
     public void drawUpdate(double x, double y) {
         if (mode == "select" && active)
@@ -334,7 +322,7 @@ public class HelloController {
         }
 
         // This is mainly just a ghost rectangle to guide the user.
-        if (active && currentBox != null && mode != "select")
+        if (active && currentBox != null && mode != "select" && mode != "busLine")
         {
             // Clear the canvas to avoid unnecessary ghost rectangles
             clearGCBoard();
@@ -385,6 +373,28 @@ public class HelloController {
 
             gc.fillPolygon(currentBox.getXcoords(), currentBox.getYcoords(),4);
         }
+
+        if (active && currentBusNode != null && mode == "busLine")
+        {
+            clearGCBoard();
+
+            currentBusNode.setPosition(x,y);
+            currentBusNode.setLocked(lockCursorBusLine(currentBusNode));
+
+            gc.setFill(Color.rgb(34, 170, 246, hoverOpacity));
+            gc.fillOval(currentBusNode.getX()-4.0, currentBusNode.getY()-4.0, 8.0, 8.0);
+
+            if (mouseDown == true && busNodes.size() > 0)
+            {
+                BusNode lastNode = busNodes.get(busNodes.size()-1);
+                gc.beginPath();
+                gc.moveTo(lastNode.getX(), lastNode.getY());
+                gc.setLineWidth(5.0);
+                gc.lineTo(currentBusNode.getX(), currentBusNode.getY());
+                gc.setStroke(Color.rgb(34, 170, 246, hoverOpacity));
+                gc.stroke();
+            }
+        }
     }
 
     // Escape to cancel action
@@ -430,14 +440,66 @@ public class HelloController {
     /// AESTHETICS ///
     //////////////////
 
-    // Draw nodes
+    // Animates change in money
 
+    private void animateLabel(double cost)
+    {
+        Label label = new Label();
+        String formatCost = formatLargeNumber(cost);
+
+        if (cost > 0)
+        {
+            label.setText("+" + formatCost);
+            label.setStyle("-fx-text-fill: green");
+        }
+        else
+        {
+            label.setText(formatCost);
+            label.setStyle("-fx-text-fill: red");
+        }
+
+        Platform.runLater(() -> anchorPane.getChildren().add(label));
+        label.setLayoutY(50.0);
+
+        int secondsWait = 15;
+        while (secondsWait > 0) {
+            label.setLayoutY(label.getLayoutY()-2.0);
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            secondsWait--;
+        }
+
+        label.setVisible(false);
+        Platform.runLater(() -> anchorPane.getChildren().remove(label));
+    }
+
+    // Draw nodes
     private void drawNodes(Box cB, GraphicsContext graphicsC)
     {
+        Paint previousColor = graphicsC.getFill();
+
         double xnode[] = cB.getXnodes();
         double ynode[] = cB.getYnodes();
 
         for (int i = 0;i < 12;i++)
+        {
+            graphicsC.setFill(Color.rgb(0, 255, 0));
+            graphicsC.fillOval(xnode[i]-2.5, ynode[i]-2.5, 5.0, 5.0);
+        }
+        graphicsC.setFill(previousColor);
+    }
+
+    // Draw bus nodes
+    private void drawBusNodes(Road cB, GraphicsContext graphicsC)
+    {
+        double xnode[] = cB.getBusNodeX();
+        double ynode[] = cB.getBusNodeY();
+
+        for (int i = 0;i < 2;i++)
         {
             graphicsC.setFill(Color.rgb(0, 255, 0));
             graphicsC.fillOval(xnode[i]-2.5, ynode[i]-2.5, 5.0, 5.0);
@@ -476,6 +538,33 @@ public class HelloController {
      /// CURSOR LOCKING METHODS ///
     //////////////////////////////
 
+    private boolean lockCursorBusLine(BusNode node)
+    {
+        double closestX = node.getX();
+        double closestY = node.getY();
+        boolean locked = false;
+
+        for (Box road:existingBoxes)
+        {
+            if (road instanceof Road)
+            {
+                double currentX = ((Road) road).getClosestBusX(node.getX(),node.getY());
+                double currentY = ((Road) road).getClosestBusY(node.getX(),node.getY());
+
+                if (currentX != -1 && currentY != -1)
+                {
+                    locked = true;
+                    closestX = currentX;
+                    closestY = currentY;
+                }
+            }
+        }
+
+        node.setPosition(closestX, closestY);
+
+        return locked;
+    }
+
     private void lockCursor(Road road)
     {
         double closestX = road.getX1();
@@ -491,7 +580,6 @@ public class HelloController {
 
             if (currentX != -1 && currentY != -1)
             {
-                System.out.println("Connection");
                 closestX = currentX+offsetX;
                 closestY = currentY+offsetY;
             }

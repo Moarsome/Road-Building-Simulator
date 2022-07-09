@@ -19,6 +19,7 @@
             <Button minWidth="120.0" fx:id="selectButton" text="Select"/>
             <Button minWidth="120.0" fx:id="boxButton" text="Building"/>
             <Button minWidth="120.0" fx:id="roadButton" text="Road"/>
+            <Button minWidth="120.0" fx:id="busLineButton" text="Bus line"/>
         </VBox>
         <Pane styleClass="bordered" layoutX="150.0" layoutY="50.0"  prefHeight="500.0" prefWidth="650.0">
             <Canvas fx:id="overlayCanvas" height="500.0" width="650.0" />
