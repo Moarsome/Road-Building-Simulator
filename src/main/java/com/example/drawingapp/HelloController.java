@@ -1,34 +1,21 @@
 package com.example.drawingapp;
 
 import javafx.application.Platform;
-import javafx.concurrent.Task;
 import javafx.fxml.FXML;
-import javafx.scene.Group;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.effect.ColorAdjust;
 import javafx.scene.input.KeyCode;
-import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.AnchorPane;
-import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.Paint;
-import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
-import javafx.scene.text.Text;
-import javafx.scene.text.TextAlignment;
 
-import java.net.URL;
 import java.text.DecimalFormat;
-import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.ResourceBundle;
-
 // TODO
 
 
@@ -48,8 +35,8 @@ public class HelloController {
     @FXML private Label moneyLabel;
 
     private String mode = "none";
-    private boolean active = false;
-    private boolean mouseDown = false;
+    private boolean active;
+    private boolean mouseDown;
     private List<Box> existingBoxes;
     private List<BusNode> busNodes;
     private CTextBox sellButton;
@@ -57,7 +44,7 @@ public class HelloController {
     private Box currentBox;
     private BusNode currentBusNode;
     private User user;
-    private double hoverOpacity = 0.7;
+    private double hoverOpacity;
 
     @FXML
     public void initialize() {
@@ -65,6 +52,10 @@ public class HelloController {
 
         existingBoxes  = new ArrayList<>();
         busNodes = new ArrayList<>();
+
+        active = false;
+        mouseDown = false;
+        hoverOpacity = 0.7;
 
         // Initialise User
         user = new User();
@@ -94,10 +85,12 @@ public class HelloController {
 
     public void drawBackground()
     {
-        ogc.clearRect(0,0, canvas.getWidth(), canvas.getHeight());
+        clearOGCBoard();
         ogc.setFill(Color.rgb(115, 189, 89));
         ogc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
         drawBoxes();
+        drawBusLines(ogc);
+        drawBusLineNodes();
     }
 
     private void drawBoxes()
@@ -123,26 +116,25 @@ public class HelloController {
         active = false;
         clearGCBoard();
 
-        if (nextMode == "building")
-        {
-            System.out.println("Created building");
-            active = false;
-            currentBox = new Building();
-            gc.setFill(Color.rgb(243, 189, 96, .8));
-        }
-        else if (nextMode == "road") {
-            active = true;
-            currentBox = new Road();
-            gc.setFill(Color.rgb(87, 87, 87, .8));
-        }
-        else if (nextMode == "select")
-        {
-            active = true;
-        }
-        else if (nextMode == "busLine")
-        {
-            active = true;
-            currentBusNode = new BusNode();
+        switch (nextMode) {
+            case "building" -> {
+                System.out.println("Created building");
+                active = false;
+                currentBox = new Building();
+                gc.setFill(Color.rgb(243, 189, 96, .8));
+            }
+            case "road" -> {
+                active = true;
+                currentBox = new Road();
+                gc.setFill(Color.rgb(87, 87, 87, .8));
+            }
+            case "select" -> {
+                active = true;
+            }
+            case "busLine" -> {
+                active = true;
+                currentBusNode = new BusNode();
+            }
         }
 
         mode = nextMode;
@@ -171,13 +163,12 @@ public class HelloController {
     public void drawClicked(double x, double y) {
         clearGCBoard();
 
-        if (mode == "select")
+        switch (mode)
         {
-            // Check if player wants to sell
-            if (sellButton != null)
-            {
-                    if (sellButton.onMouseEnter(x,y) && selectedBox != null)
-                    {
+            case "select" -> {
+                // Check if player wants to sell
+                if (sellButton != null) {
+                    if (sellButton.onMouseEnter(x, y) && selectedBox != null) {
                         double refund = selectedBox.getCost();
                         Thread taskThread = new Thread(() -> animateLabel(refund));
                         user.addMoney(refund);
@@ -185,121 +176,105 @@ public class HelloController {
 
                         taskThread.start();
                         existingBoxes.remove(selectedBox);
-                        drawBackground();
                     }
+                }
+
+                sellButton = null;
+                midgc.clearRect(0, 0, midCanvas.getWidth(), midCanvas.getHeight());
+                Box hoverBox = checkBoxInBounds(x, y);
+
+                if (hoverBox != null) {
+                    selectedBox = hoverBox;
+                    // Attempt border
+                    midgc.setFill(Color.WHITE);
+                    midgc.fillPolygon(borderArray(hoverBox.getXcoords(), 2), borderArray(hoverBox.getYcoords(), 2), 4);
+                    midgc.setFill(hoverBox.getColor());
+                    midgc.fillPolygon(hoverBox.getXcoords(), hoverBox.getYcoords(), 4);
+
+                    // Draw sell button
+                    CTextBox btn = new CTextBox(10, 10, 50, 30, "SELL", Color.RED, Color.WHITE);
+                    btn.draw(gc);
+                    sellButton = btn;
+                }
             }
+            case "building" -> {
+                if (!active) {
+                    active = true;
+                    infoLabel.setText("Press 'esc' to cancel");
+                    currentBox.updatePosition(x, y);
+                    gc.setFill(currentBox.getColor().deriveColor(0, 1, 1, hoverOpacity));
+                } else {
+                    if (user.deductMoney(currentBox.getCost())) {
+                        // Creating a thread to make deduction info disappear after 3 seconds
+                        double cost = currentBox.getCost() * -1.0;
+                        Thread taskThread = new Thread(() -> animateLabel(cost));
+                        taskThread.start();
+                        // End
 
-            sellButton = null;
-            midgc.clearRect(0,0, midCanvas.getWidth(), midCanvas.getHeight());
-            Box hoverBox = checkBoxInBounds(x,y);
+                        moneyLabel.setText(formatLargeNumber(user.getMoney()));
+                        active = false;
 
-            if (hoverBox != null)
-            {
-                selectedBox = hoverBox;
-                // Attempt border
-                midgc.setFill(Color.WHITE);
-                midgc.fillPolygon(borderArray(hoverBox.getXcoords(), 2), borderArray(hoverBox.getYcoords(), 2), 4);
-                midgc.setFill(hoverBox.getColor());
-                midgc.fillPolygon(hoverBox.getXcoords(),hoverBox.getYcoords(),4);
+                        infoLabel.setText("Building created!");
+                        ogc.setFill(Color.rgb(243, 189, 96));
 
-                // Draw sell button
-                CTextBox btn = new CTextBox(10,10,50,30,"SELL", Color.RED, Color.WHITE);
-                btn.draw(gc);
-                sellButton = btn;
-            }
-        }
+                        if (currentBox.getX1() > x) {
+                            currentBox.setX2(x);
+                        }
+                        if (currentBox.getY1() > y) {
+                            currentBox.setY2(y);
+                        }
 
-        if (mode == "building") {
-            System.out.println("MODE BOX");
+                        existingBoxes.add(currentBox);
 
-            if (!active) {
-                active = true;
-                infoLabel.setText("Press 'esc' to cancel");
-                currentBox.updatePosition(x,y);
-                gc.setFill(currentBox.getColor().deriveColor(0,1,1,hoverOpacity));
-            } else {
-                if (user.deductMoney(currentBox.getCost())) {
-                    // Creating a thread to make deduction info disappear after 3 seconds
-                    double cost = currentBox.getCost()*-1.0;
-                    Thread taskThread = new Thread(() -> animateLabel(cost));
-                    taskThread.start();
-                    // End
-
-                    moneyLabel.setText(formatLargeNumber(user.getMoney()));
-                    active = false;
-
-                    infoLabel.setText("Building created!");
-                    ogc.setFill(Color.rgb(243, 189, 96));
-
-                    if (currentBox.getX1() > x) {
-                        currentBox.setX2(x);
+                        currentBox = new Building();
+                    } else {
+                        infoLabel.setText("Not enough money!");
                     }
-                    if (currentBox.getY1() > y) {
-                        currentBox.setY2(y);
+                }
+            }
+            case "road" -> {
+                if (active) {
+                    if (user.deductMoney(currentBox.cost)) {
+                        moneyLabel.setText(formatLargeNumber(user.getMoney()));
+                        infoLabel.setText("Road created!");
+
+                        ogc.setFill(currentBox.getColor());
+
+                        // Animation thread start
+                        double cost = currentBox.getCost() * -1.0;
+                        Thread taskThread = new Thread(() -> animateLabel(cost));
+                        taskThread.start();
+                        // Animation thread end
+
+                        existingBoxes.add(currentBox);
+
+                        currentBox = new Road();
+                        currentBox.setCurrentRotation(user.getRotation());
+                        gc.setFill(currentBox.getColor().deriveColor(0, 1, 1, hoverOpacity));
+                    } else {
+                        infoLabel.setText("Not enough money!");
                     }
-
-                    existingBoxes.add(currentBox);
-                    drawBoxes();
-
-                    currentBox = new Building();
-                }
-                else
-                {
-                    infoLabel.setText("Not enough money!");
                 }
             }
-        }
-        else if (mode == "road"){
-            if (active)
-            {
-                if (user.deductMoney(currentBox.cost)) {
-                    moneyLabel.setText(formatLargeNumber(user.getMoney()));
-                    infoLabel.setText("Road created!");
-
-                    ogc.setFill(currentBox.getColor());
-
-                    // Animation thread start
-                    double cost = currentBox.getCost()*-1.0;
-                    Thread taskThread = new Thread(() -> animateLabel(cost));
-                    taskThread.start();
-                    // Animation thread end
-
-                    existingBoxes.add(currentBox);
-                    drawBoxes();
-
-                    currentBox = new Road();
-                    currentBox.setCurrentRotation(user.getRotation());
-                    gc.setFill(currentBox.getColor().deriveColor(0,1,1,hoverOpacity));
-                }
-                else
-                {
-                    infoLabel.setText("Not enough money!");
-                }
-            }
-        }
-        else if (mode == "busLine")
-        {
-            if (mouseDown == false) {
-                mouseDown = true;
-
+            case "busLine" -> {
+                // Check if bus node is locked onto a road node
                 if (currentBusNode.getLocked()) {
 
+
                     busNodes.add(currentBusNode);
-                    drawBusLineNodes();
 
                     currentBusNode = new BusNode();
-                    ogc.setFill(Color.rgb(34, 170, 246,hoverOpacity));
+                    currentBusNode.addConnectedNode(busNodes.get(busNodes.size() - 1));
+
+                    ogc.setFill(Color.rgb(34, 170, 246, hoverOpacity));
                 }
             }
-            else
-            {
-                mouseDown = false;
-            }
         }
+        drawBackground();
     }
 
     public void drawUpdate(double x, double y) {
-        if (mode == "select" && active)
+        if (mode.equals("select") && active)
         {
             clearGCBoard();
             Box hoverBox = checkBoxInBounds(x,y);
@@ -322,7 +297,7 @@ public class HelloController {
         }
 
         // This is mainly just a ghost rectangle to guide the user.
-        if (active && currentBox != null && mode != "select" && mode != "busLine")
+        if (active && currentBox != null && !mode.equals("select") && !mode.equals("busLine"))
         {
             // Clear the canvas to avoid unnecessary ghost rectangles
             clearGCBoard();
@@ -333,7 +308,7 @@ public class HelloController {
             double newX = x;
             double newY = y;
 
-            if (mode == "building")
+            if (mode.equals("building"))
             {
                 double width = Math.abs(x - prevX);
                 double height = Math.abs(y - prevY);
@@ -355,7 +330,7 @@ public class HelloController {
                 gc.fillText("-"+formatLargeNumber(currentBox.getCost()),x+10.0,y-5.0);
                 gc.setFill(currentBox.getColor().deriveColor(0,1,1,hoverOpacity));
             }
-            else if (mode == "road")
+            else if (mode.equals("road"))
             {
                 currentBox.updatePosition(x,y);
                 lockCursor((Road) currentBox);
@@ -374,24 +349,32 @@ public class HelloController {
             gc.fillPolygon(currentBox.getXcoords(), currentBox.getYcoords(),4);
         }
 
-        if (active && currentBusNode != null && mode == "busLine")
+        if (active && currentBusNode != null && mode.equals("busLine"))
         {
             clearGCBoard();
 
             currentBusNode.setPosition(x,y);
             currentBusNode.setLocked(lockCursorBusLine(currentBusNode));
 
-            gc.setFill(Color.rgb(34, 170, 246, hoverOpacity));
+            if (currentBusNode.getLocked())
+            {
+                gc.setFill(Color.rgb(34, 170, 246, hoverOpacity));
+                gc.setStroke(Color.rgb(34, 170, 246, hoverOpacity));
+            }
+            else
+            {
+                gc.setFill(Color.rgb(220, 0, 0, hoverOpacity));
+                gc.setStroke(Color.rgb(220, 0, 0, hoverOpacity));
+            }
             gc.fillOval(currentBusNode.getX()-4.0, currentBusNode.getY()-4.0, 8.0, 8.0);
 
-            if (mouseDown == true && busNodes.size() > 0)
+            if (busNodes.size() > 0)
             {
                 BusNode lastNode = busNodes.get(busNodes.size()-1);
                 gc.beginPath();
                 gc.moveTo(lastNode.getX(), lastNode.getY());
                 gc.setLineWidth(5.0);
                 gc.lineTo(currentBusNode.getX(), currentBusNode.getY());
-                gc.setStroke(Color.rgb(34, 170, 246, hoverOpacity));
                 gc.stroke();
             }
         }
@@ -434,6 +417,12 @@ public class HelloController {
     private void clearGCBoard()
     {
         gc.clearRect(0,0,canvas.getWidth(),canvas.getHeight());
+    }
+
+    // Clears the bottom canvas board
+    private void clearOGCBoard()
+    {
+        ogc.clearRect(0,0,canvas.getWidth(),canvas.getHeight());
     }
 
     //////////////////
@@ -482,8 +471,8 @@ public class HelloController {
     {
         Paint previousColor = graphicsC.getFill();
 
-        double xnode[] = cB.getXnodes();
-        double ynode[] = cB.getYnodes();
+        double[] xnode = cB.getXnodes();
+        double[] ynode = cB.getYnodes();
 
         for (int i = 0;i < 12;i++)
         {
@@ -496,14 +485,34 @@ public class HelloController {
     // Draw bus nodes
     private void drawBusNodes(Road cB, GraphicsContext graphicsC)
     {
-        double xnode[] = cB.getBusNodeX();
-        double ynode[] = cB.getBusNodeY();
+        double[] xnode = cB.getBusNodeX();
+        double[] ynode = cB.getBusNodeY();
 
         for (int i = 0;i < 2;i++)
         {
             graphicsC.setFill(Color.rgb(0, 255, 0));
             graphicsC.fillOval(xnode[i]-2.5, ynode[i]-2.5, 5.0, 5.0);
         }
+    }
+
+    private void drawBusLines(GraphicsContext graphicsC)
+    {
+        Paint previousColor = graphicsC.getFill();
+
+        for (BusNode n:busNodes)
+        {
+            for (BusNode nChild:n.getConnectedNodes())
+            {
+                graphicsC.beginPath();
+                graphicsC.moveTo(n.getX(), n.getY());
+                graphicsC.setLineWidth(5.0);
+                graphicsC.lineTo(nChild.getX(), nChild.getY());
+                graphicsC.setStroke(Color.rgb(34, 170, 246));
+                graphicsC.stroke();
+            }
+        }
+
+        graphicsC.setFill(previousColor);
     }
 
     // Create border
@@ -513,12 +522,11 @@ public class HelloController {
 
         double minNum = dArray[0], maxNum = dArray[0];
 
-        for (int j = 0; j < dArray.length; j++)
-        {
-            if (dArray[j] < minNum)
-                minNum = dArray[j];
-            if (dArray[j] > maxNum)
-                maxNum = dArray[j];
+        for (double v : dArray) {
+            if (v < minNum)
+                minNum = v;
+            if (v > maxNum)
+                maxNum = v;
         }
 
         int i = 0;

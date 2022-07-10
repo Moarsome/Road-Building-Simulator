@@ -33,29 +33,7 @@ abstract class Box {
     static AtomicInteger atomicInt = new AtomicInteger(); // creates unique id
     protected int id;
 
-    public Box(double x1, double y1, double width, double height){
-        generateSkeleton();
-
-        this.width = width;
-        this.height = height;
-
-        this.updatePosition(x1,y1);
-    }
-
-    public Box(double x1, double y1)
-    {
-        generateSkeleton();
-
-        xcoords[0] = x1;
-        ycoords[0] = y1;
-    }
-
     public Box()
-    {
-        generateSkeleton();
-    }
-
-    private void generateSkeleton()
     {
         this.xcoords = new double[4];
         this.ycoords = new double[4];
@@ -65,6 +43,23 @@ abstract class Box {
         this.minDist = 15.0;
         this.id = atomicInt.incrementAndGet(); // Generates ID
         this.currentRotation = 0;
+    }
+
+    public Box(double x1, double y1, double width, double height){
+        this();
+
+        this.width = width;
+        this.height = height;
+
+        this.updatePosition(x1,y1);
+    }
+
+    public Box(double x1, double y1)
+    {
+        this();
+
+        xcoords[0] = x1;
+        ycoords[0] = y1;
     }
 
     // Retrieves midpoint between 2 values

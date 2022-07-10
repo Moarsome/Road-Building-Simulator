@@ -1,21 +1,24 @@
 package com.example.drawingapp;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class BusNode {
     private double x;
     private double y;
     private boolean locked;
-
-    BusNode(double x, double y)
-    {
-        this.x = x;
-        this.y = y;
-        this.locked = false;
-    }
+    private List<BusNode> connectedNodes;
 
     BusNode()
     {
-        this.x = 0;
-        this.y = 0;
+        this(0,0);
+    }
+
+    BusNode(double x, double y)
+    {
+        this.connectedNodes = new ArrayList<>();
+        this.x = x;
+        this.y = y;
         this.locked = false;
     }
 
@@ -33,6 +36,16 @@ public class BusNode {
     public double getY()
     {
         return y;
+    }
+
+    public List<BusNode> getConnectedNodes()
+    {
+        return this.connectedNodes;
+    }
+
+    public void addConnectedNode(BusNode n)
+    {
+        this.connectedNodes.add(n);
     }
 
     public boolean getLocked()
